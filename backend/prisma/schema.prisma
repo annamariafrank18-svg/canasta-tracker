@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  players Player[]
+  games   Game[]
+  groups  Group[]
+}
+
+model Player {
+  id        String   @id @default(cuid())
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  userId    String
+
+  user          User           @relation(fields: [userId], references: [id])
+  teamPlayers   TeamPlayer[]
+  playerStats   PlayerStats?
+
+  @@unique([name, userId])
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  userId    String
+
+  user  User   @relation(fields: [userId], references: [id])
+  games Game[]
+}
+
+model Game {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now())
+  teamAScore  Int
+  teamBScore  Int
+  notes       String?
+  photoUrl    String?
+  createdAt   DateTime @default(now())
+  userId      String
+  groupId     String?
+
+  user    User         @relation(fields: [userId], references: [id])
+  group   Group?       @relation(fields: [groupId], references: [id])
+  players TeamPlayer[]
+  rounds  Round[]
+}
+
+model TeamPlayer {
+  id       String @id @default(cuid())
+  gameId   String
+  playerId String
+  team     Team
+
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([gameId, playerId])
+}
+
+model Round {
+  id         String @id @default(cuid())
+  gameId     String
+  roundNum   Int
+  teamAScore Int
+  teamBScore Int
+
+  game Game @relation(fields: [gameId], references: [id])
+
+  @@unique([gameId, roundNum])
+}
+
+model PlayerStats {
+  id           String @id @default(cuid())
+  playerId     String @unique
+  totalGames   Int    @default(0)
+  totalWins    Int    @default(0)
+  totalPoints  Int    @default(0)
+  currentStreak Int   @default(0)
+  bestStreak   Int    @default(0)
+  updatedAt    DateTime @updatedAt
+
+  player Player @relation(fields: [playerId], references: [id])
+}
+
+enum Team {
+  A
+  B
+}
