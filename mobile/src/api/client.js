@@ -1,10 +1,7 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// Change this to your Render URL after deployment
-const API_URL = __DEV__ 
-  ? 'http://10.0.2.2:3000/api'  // Android emulator
-  : 'https://your-app.onrender.com/api';
+const API_URL = 'https://canasta-api.onrender.com/api';
 
 const api = axios.create({
   baseURL: API_URL,
