@@ -5,7 +5,7 @@ services:
     region: frankfurt
     plan: free
     rootDir: backend
-    buildCommand: npx prisma generate && npx prisma migrate deploy
+    buildCommand: node_modules/.bin/prisma generate && node_modules/.bin/prisma db push
     startCommand: node src/index.js
     envVars:
       - key: DATABASE_URL
