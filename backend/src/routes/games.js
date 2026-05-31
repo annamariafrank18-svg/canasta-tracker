@@ -103,6 +103,10 @@ router.post('/', [
 // Delete game
 router.delete('/:id', async (req, res) => {
   try {
+    // Delete related rounds first (no cascade)
+    await prisma.round.deleteMany({
+      where: { game: { id: req.params.id, userId: req.userId } }
+    });
     await prisma.game.deleteMany({
       where: { id: req.params.id, userId: req.userId }
     });
