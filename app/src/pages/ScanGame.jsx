@@ -205,53 +205,86 @@ export default function ScanGame() {
     const games = [];
 
     if (isRunningTotal) {
-      // Values are cumulative — compute differences
-      const corrected = rows.map(row => ({
-        totalA: roundToCanasta(row.valA),
-        totalB: roundToCanasta(row.valB),
-        rawA: row.rawA,
-        rawB: row.rawB,
-      }));
+      // --- Global column correction for systematic 1/7 OCR confusion ---
+      // Determine expected digit count from the majority of rows
+      const allLens = rows.map(r => r.rawA.length).concat(rows.map(r => r.rawB.length));
+      allLens.sort((a, b) => a - b);
+      const expectedLen = allLens[Math.floor(allLens.length / 2)]; // median digit count
 
-      // Auto-detect starting base: if no manual start was given and first row
-      // is already way above MAX_ROUND_SCORE, use first row as baseline
+      // Fix systematic leading-7 errors and wrong digit counts
+      const firstA = rows[0].rawA;
+      const firstB = rows[0].rawB;
+
+      const correctedRows = rows.map(row => {
+        let rawA = row.rawA;
+        let rawB = row.rawB;
+
+        // Fix leading digit: if first row starts with 1 and this starts with 7, swap
+        if (firstA[0] === '1' && rawA[0] === '7') {
+          rawA = '1' + rawA.slice(1);
+        }
+        if (firstB[0] === '1' && rawB[0] === '7') {
+          rawB = '1' + rawB.slice(1);
+        }
+
+        // Fix wrong digit count: truncate to expected length if too long
+        if (rawA.length > expectedLen) {
+          rawA = rawA.slice(0, expectedLen);
+        }
+        if (rawB.length > expectedLen) {
+          rawB = rawB.slice(0, expectedLen);
+        }
+
+        // Skip rows where numbers are way too short (OCR fragments)
+        if (rawA.length < expectedLen - 1 || rawB.length < expectedLen - 1) {
+          return null; // will be filtered out
+        }
+
+        return {
+          totalA: roundToCanasta(parseInt(rawA) || row.valA),
+          totalB: roundToCanasta(parseInt(rawB) || row.valB),
+          rawA,
+          rawB,
+        };
+      }).filter(r => r !== null);
+
+      // Determine starting base
       let baseA = initialA;
       let baseB = initialB;
       let startIdx = 0;
 
-      if (initialA === 0 && initialB === 0 && corrected.length > 0) {
-        const firstA = corrected[0].totalA;
-        const firstB = corrected[0].totalB;
-        if (firstA > MAX_ROUND_SCORE || firstB > MAX_ROUND_SCORE) {
-          // First row is the starting score, actual rounds start from row 2
-          baseA = firstA;
-          baseB = firstB;
+      if (initialA === 0 && initialB === 0 && correctedRows.length > 0) {
+        const fA = correctedRows[0].totalA;
+        const fB = correctedRows[0].totalB;
+        if (fA > MAX_ROUND_SCORE || fB > MAX_ROUND_SCORE) {
+          baseA = fA;
+          baseB = fB;
           startIdx = 1;
         }
       }
 
-      for (let i = startIdx; i < corrected.length; i++) {
-        const curr = corrected[i];
-        const prev = i > startIdx ? corrected[i - 1] : { totalA: baseA, totalB: baseB };
+      for (let i = startIdx; i < correctedRows.length; i++) {
+        const curr = correctedRows[i];
+        const prev = i > startIdx ? correctedRows[i - 1] : { totalA: baseA, totalB: baseB };
 
         let diffA = curr.totalA - prev.totalA;
         let diffB = curr.totalB - prev.totalB;
 
-        // Fix 1/7 OCR confusion
-        if ((diffA < 0 || diffA > MAX_ROUND_SCORE) && curr.rawA) {
+        // Try additional 1/7 fixes at individual positions if diff is bad
+        if (Math.abs(diffA) > MAX_ROUND_SCORE && curr.rawA) {
           const variants = fix17Variants(curr.rawA);
           for (const v of variants) {
             const c = roundToCanasta(v);
             const d = c - prev.totalA;
-            if (d >= 0 && d <= MAX_ROUND_SCORE) { curr.totalA = c; diffA = d; break; }
+            if (Math.abs(d) <= MAX_ROUND_SCORE) { curr.totalA = c; diffA = d; break; }
           }
         }
-        if ((diffB < 0 || diffB > MAX_ROUND_SCORE) && curr.rawB) {
+        if (Math.abs(diffB) > MAX_ROUND_SCORE && curr.rawB) {
           const variants = fix17Variants(curr.rawB);
           for (const v of variants) {
             const c = roundToCanasta(v);
             const d = c - prev.totalB;
-            if (d >= 0 && d <= MAX_ROUND_SCORE) { curr.totalB = c; diffB = d; break; }
+            if (Math.abs(d) <= MAX_ROUND_SCORE) { curr.totalB = c; diffB = d; break; }
           }
         }
 
