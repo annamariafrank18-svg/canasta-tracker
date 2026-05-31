@@ -21,7 +21,7 @@ export default function Stats() {
 
   // Compute team-based stats
   const teamStats = useMemo(() => {
-    if (!games || games.length === 0) return { chartData: [], teams: [], rankings: [] };
+    if (!games || games.length === 0) return { chartData: [], teams: [], rankings: [], funStats: [] };
 
     const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
     const teamTotals = {}; // cumulative scores
