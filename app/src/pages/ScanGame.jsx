@@ -216,7 +216,7 @@ export default function ScanGame() {
       if (i === 0 && (curr.totalA > 50000 || curr.totalB > 50000)) continue;
 
       // Fix 1/7 OCR confusion: if diff exceeds max, try swapping 1<->7
-      if (Math.abs(diffA) > MAX_ROUND_SCORE && correctedTotals[i].rawA) {
+      if ((diffA < 0 || diffA > MAX_ROUND_SCORE) && correctedTotals[i].rawA) {
         const variants = fix17Variants(correctedTotals[i].rawA);
         for (const v of variants) {
           const corrected = roundToCanasta(v);
@@ -229,7 +229,7 @@ export default function ScanGame() {
         }
       }
 
-      if (Math.abs(diffB) > MAX_ROUND_SCORE && correctedTotals[i].rawB) {
+      if ((diffB < 0 || diffB > MAX_ROUND_SCORE) && correctedTotals[i].rawB) {
         const variants = fix17Variants(correctedTotals[i].rawB);
         for (const v of variants) {
           const corrected = roundToCanasta(v);
@@ -241,6 +241,10 @@ export default function ScanGame() {
           }
         }
       }
+
+      // STRICT: Skip row if difference is still impossible after corrections
+      if (diffA > MAX_ROUND_SCORE || diffA < -MAX_ROUND_SCORE) continue;
+      if (diffB > MAX_ROUND_SCORE || diffB < -MAX_ROUND_SCORE) continue;
 
       // Ensure diffs are valid Canasta scores (end in 0 or 5)
       diffA = roundToCanasta(diffA);
