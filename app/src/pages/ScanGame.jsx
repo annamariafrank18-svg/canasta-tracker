@@ -11,6 +11,7 @@ export default function ScanGame() {
   const [tableMode, setTableMode] = useState('perRound'); // 'perRound' or 'runningTotal'
   const [startA, setStartA] = useState('');
   const [startB, setStartB] = useState('');
+  const [editedGames, setEditedGames] = useState([]);
   const navigate = useNavigate();
 
   const takePhoto = async () => {
@@ -77,6 +78,7 @@ export default function ScanGame() {
       const text = data.ParsedResults?.[0]?.ParsedText || '';
       const parsed = parseScoreTable(text, tableMode, parseInt(startA) || 0, parseInt(startB) || 0);
       setResults(parsed);
+      setEditedGames(parsed.games.map(g => ({ scoreA: g.scoreA, scoreB: g.scoreB })));
     } catch (err) {
       setError('Fehler bei der Texterkennung. Prüfe deine Internetverbindung.');
     }
@@ -160,8 +162,8 @@ export default function ScanGame() {
       const allRaw = nums.map(n => n.raw).join('');
       const totalDigits = allRaw.length;
 
-      if (nums.length === 2 && nums[0].raw.length >= 3 && nums[1].raw.length >= 3) {
-        // Two solid numbers — use directly
+      if (nums.length === 2 && nums[0].raw.length >= 2 && nums[1].raw.length >= 1) {
+        // Two numbers on the line — use directly (allows small scores like 80, -40)
         rows.push({ rawA: nums[0].raw, rawB: nums[1].raw, negA: nums[0].neg, negB: nums[1].neg });
         i++;
       } else if (nums.length === 1 && nums[0].raw.length >= 5) {
@@ -354,13 +356,21 @@ export default function ScanGame() {
     };
   };
 
+  const updateEditedGame = (index, field, value) => {
+    setEditedGames(prev => prev.map((g, i) =>
+      i === index ? { ...g, [field]: value } : g
+    ));
+  };
+
+  const removeEditedGame = (index) => {
+    setEditedGames(prev => prev.filter((_, i) => i !== index));
+  };
+
   const useResults = () => {
-    if (results?.games?.length > 0) {
-      // Navigate to NewGame with each game as a separate entry
-      // For now, take the last game (most recent)
+    if (editedGames.length > 0) {
       navigate('/games/new', {
         state: {
-          scannedRounds: results.games.map(g => ({
+          scannedRounds: editedGames.map(g => ({
             scoreA: g.scoreA,
             scoreB: g.scoreB,
           })),
@@ -462,9 +472,9 @@ export default function ScanGame() {
               <span className="scan-team-badge team-b">{results.teamBName}</span>
             </div>
 
-            <h3>{results.games.length} Spiele erkannt</h3>
+            <h3>{editedGames.length} Spiele erkannt</h3>
 
-            {results.games.length === 0 ? (
+            {editedGames.length === 0 ? (
               <p className="scan-no-results">
                 Keine Zahlen erkannt. Versuche ein schärferes Foto mit guter Beleuchtung.
               </p>
@@ -475,24 +485,34 @@ export default function ScanGame() {
                     <span>#</span>
                     <span>{results.teamAName}</span>
                     <span>{results.teamBName}</span>
-                    <span>Sieger</span>
+                    <span></span>
                   </div>
-                  {results.games.map((g, i) => {
-                    const a = parseInt(g.scoreA);
-                    const b = parseInt(g.scoreB);
+                  {editedGames.map((g, i) => {
+                    const a = parseInt(g.scoreA) || 0;
+                    const b = parseInt(g.scoreB) || 0;
                     return (
                       <div key={i} className="scan-round-row">
                         <span className="scan-game-num">{i + 1}</span>
-                        <span className={a > b ? 'scan-winner' : ''}>{a.toLocaleString('de-DE')}</span>
-                        <span className={b > a ? 'scan-winner' : ''}>{b.toLocaleString('de-DE')}</span>
-                        <span>{a > b ? '🅰️' : b > a ? '🅱️' : '🤝'}</span>
+                        <input
+                          type="number"
+                          value={g.scoreA}
+                          onChange={(e) => updateEditedGame(i, 'scoreA', e.target.value)}
+                          className={a > b ? 'scan-input winner' : 'scan-input'}
+                        />
+                        <input
+                          type="number"
+                          value={g.scoreB}
+                          onChange={(e) => updateEditedGame(i, 'scoreB', e.target.value)}
+                          className={b > a ? 'scan-input winner' : 'scan-input'}
+                        />
+                        <button type="button" className="btn-delete-sm" onClick={() => removeEditedGame(i)}>✕</button>
                       </div>
                     );
                   })}
                   <div className="scan-total-row">
                     <span>Σ</span>
-                    <span>{results.games.reduce((s, g) => s + parseInt(g.scoreA), 0).toLocaleString('de-DE')}</span>
-                    <span>{results.games.reduce((s, g) => s + parseInt(g.scoreB), 0).toLocaleString('de-DE')}</span>
+                    <span>{editedGames.reduce((s, g) => s + (parseInt(g.scoreA) || 0), 0).toLocaleString('de-DE')}</span>
+                    <span>{editedGames.reduce((s, g) => s + (parseInt(g.scoreB) || 0), 0).toLocaleString('de-DE')}</span>
                     <span></span>
                   </div>
                 </div>
