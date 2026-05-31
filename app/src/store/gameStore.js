@@ -73,6 +73,16 @@ const useGameStore = create((set, get) => ({
     }
   },
 
+  deleteAllGames: async () => {
+    const { games } = get();
+    try {
+      await Promise.all(games.map(g => client.delete(`/games/${g.id}`)));
+      set({ games: [] });
+    } catch (err) {
+      set({ error: err.response?.data?.error || 'Fehler beim Löschen' });
+    }
+  },
+
   // Stats
   fetchStats: async () => {
     set({ loading: true });

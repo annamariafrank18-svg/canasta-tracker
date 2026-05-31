@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 import Layout from '../components/Layout';
 
 export default function Home() {
-  const { games, fetchGames, deleteGame, loading } = useGameStore();
+  const { games, fetchGames, deleteGame, deleteAllGames, loading } = useGameStore();
   const navigate = useNavigate();
+  const [confirmDelete, setConfirmDelete] = useState(null); // game id or 'all'
 
   useEffect(() => {
     fetchGames();
@@ -17,6 +18,23 @@ export default function Home() {
     });
   };
 
+  const handleDelete = (id) => {
+    setConfirmDelete(id);
+  };
+
+  const handleDeleteAll = () => {
+    setConfirmDelete('all');
+  };
+
+  const confirmAction = async () => {
+    if (confirmDelete === 'all') {
+      await deleteAllGames();
+    } else {
+      await deleteGame(confirmDelete);
+    }
+    setConfirmDelete(null);
+  };
+
   return (
     <Layout>
       <div className="page">
@@ -26,6 +44,24 @@ export default function Home() {
             + Neues Spiel
           </button>
         </div>
+
+        {games.length > 0 && (
+          <button className="btn-danger btn-sm" onClick={handleDeleteAll}>
+            🗑️ Alle Spiele löschen
+          </button>
+        )}
+
+        {confirmDelete && (
+          <div className="confirm-overlay">
+            <div className="confirm-dialog">
+              <p>{confirmDelete === 'all' ? 'Alle Spiele wirklich löschen?' : 'Spiel wirklich löschen?'}</p>
+              <div className="confirm-actions">
+                <button className="btn-secondary" onClick={() => setConfirmDelete(null)}>Abbrechen</button>
+                <button className="btn-danger" onClick={confirmAction}>Löschen</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {loading && <p className="loading">Lädt...</p>}
 
@@ -43,7 +79,7 @@ export default function Home() {
                 <span className="game-date">{formatDate(game.date)}</span>
                 <button
                   className="btn-delete"
-                  onClick={() => { if (confirm('Spiel löschen?')) deleteGame(game.id); }}
+                  onClick={() => handleDelete(game.id)}
                 >
                   🗑️
                 </button>
