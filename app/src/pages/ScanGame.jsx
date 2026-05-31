@@ -8,6 +8,7 @@ export default function ScanGame() {
   const [parsing, setParsing] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [tableMode, setTableMode] = useState('perRound'); // 'perRound' or 'runningTotal'
   const navigate = useNavigate();
 
   const takePhoto = async () => {
@@ -72,7 +73,7 @@ export default function ScanGame() {
       }
 
       const text = data.ParsedResults?.[0]?.ParsedText || '';
-      const parsed = parseScoreTable(text);
+      const parsed = parseScoreTable(text, tableMode);
       setResults(parsed);
     } catch (err) {
       setError('Fehler bei der Texterkennung. Prüfe deine Internetverbindung.');
@@ -80,8 +81,8 @@ export default function ScanGame() {
     setParsing(false);
   };
 
-  // Parse a Canasta score table with running totals
-  const parseScoreTable = (text) => {
+  // Parse a Canasta score table
+  const parseScoreTable = (text, mode) => {
     const lines = text.split('\n').filter(l => l.trim());
 
     // Try to detect team names from header line
@@ -171,15 +172,8 @@ export default function ScanGame() {
       return { teamAName, teamBName, games: [], runningTotals: [], rawText: text, isRunningTotal: false };
     }
 
-    // Detect if values are running totals or per-round scores
-    // Running totals: values generally increase. Per-round: can go up/down freely.
-    let increasingCount = 0;
-    for (let i = 1; i < rows.length; i++) {
-      if (rows[i].valA >= rows[i - 1].valA) increasingCount++;
-      if (rows[i].valB >= rows[i - 1].valB) increasingCount++;
-    }
-    const totalComparisons = (rows.length - 1) * 2;
-    const isRunningTotal = totalComparisons > 0 && (increasingCount / totalComparisons) >= 0.7;
+    // Use user-selected mode
+    const isRunningTotal = mode === 'runningTotal';
 
     const games = [];
 
@@ -285,8 +279,23 @@ export default function ScanGame() {
       <div className="page">
         <h1>📷 Tabelle scannen</h1>
         <p className="scan-description">
-          Fotografiere eure Spieltabelle mit den laufenden Gesamtständen. Die App erkennt die Spalten und berechnet die Einzelergebnisse.
+          Fotografiere eure Spieltabelle. Wähle vorher den Tabellentyp.
         </p>
+
+        <div className="chart-toggle" style={{ marginBottom: '1rem' }}>
+          <button
+            className={`toggle-btn ${tableMode === 'perRound' ? 'toggle-active' : ''}`}
+            onClick={() => setTableMode('perRound')}
+          >
+            Pro Runde
+          </button>
+          <button
+            className={`toggle-btn ${tableMode === 'runningTotal' ? 'toggle-active' : ''}`}
+            onClick={() => setTableMode('runningTotal')}
+          >
+            Laufende Summe
+          </button>
+        </div>
 
         <div className="scan-buttons">
           <button className="btn-primary" onClick={takePhoto}>
