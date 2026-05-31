@@ -130,68 +130,77 @@ export default function ScanGame() {
 
     const MAX_ROUND_SCORE = 5000;
 
-    // Extract exactly 2 numbers per line (one per team)
-    // Handles negative numbers (minus sign or em-dash before digits)
-    const rows = [];
+    // Extract numbers from each line
+    const rawLines = [];
     for (const line of lines) {
       if (!/\d/.test(line)) continue;
 
       // Normalize dashes to minus sign, clean OCR artifacts
       let cleaned = line.replace(/[–—]/g, '-');
-      // Only replace standalone O (not inside words) with 0
       cleaned = cleaned.replace(/(?<![A-Za-z])O(?![A-Za-z])/g, '0');
-      // Remove dots/commas that might be thousand separators
       cleaned = cleaned.replace(/(\d)[.,](\d)/g, '$1$2');
 
-      // Extract all numbers including negative ones
+      // Extract all number groups with positions
       const numMatches = [...cleaned.matchAll(/-?\s*\d+/g)].map(m => {
         const raw = m[0].replace(/\s+/g, '');
-        return { num: parseInt(raw), raw: raw.replace('-', ''), pos: m.index };
+        return { num: parseInt(raw), raw: raw.replace(/^-/, ''), pos: m.index, neg: raw.startsWith('-') };
       }).filter(n => !isNaN(n.num));
 
-      if (numMatches.length === 2) {
-        rows.push({
-          valA: numMatches[0].num,
-          valB: numMatches[1].num,
-          rawA: numMatches[0].raw,
-          rawB: numMatches[1].raw,
-        });
-      } else if (numMatches.length === 4) {
-        // Likely 2 numbers split by space each (e.g., "170 980  141 945" → 170980, 141945)
-        const mergedA = parseInt(numMatches[0].raw + numMatches[1].raw);
-        const mergedB = parseInt(numMatches[2].raw + numMatches[3].raw);
-        rows.push({
-          valA: mergedA,
-          valB: mergedB,
-          rawA: numMatches[0].raw + numMatches[1].raw,
-          rawB: numMatches[2].raw + numMatches[3].raw,
-        });
-      } else if (numMatches.length === 3) {
-        // One number might be split: try both split options
-        // Option A: first two merge, third standalone
-        const mergeAB = parseInt(numMatches[0].raw + numMatches[1].raw);
-        // Option B: first standalone, last two merge
-        const mergeBC = parseInt(numMatches[1].raw + numMatches[2].raw);
-        // Use gap between numbers to decide: larger gap = column separator
-        const gap1 = numMatches[1].pos - (numMatches[0].pos + numMatches[0].raw.length);
-        const gap2 = numMatches[2].pos - (numMatches[1].pos + numMatches[1].raw.length);
-        if (gap1 < gap2) {
-          // gap between 1&2 is smaller → they belong together
-          rows.push({ valA: mergeAB, valB: numMatches[2].num, rawA: numMatches[0].raw + numMatches[1].raw, rawB: numMatches[2].raw });
+      if (numMatches.length > 0) {
+        rawLines.push(numMatches);
+      }
+    }
+
+    // Merge all fragments into 2-number rows
+    // Strategy: concatenate fragments on each line to form the expected column values
+    const rows = [];
+    let i = 0;
+    while (i < rawLines.length) {
+      const nums = rawLines[i];
+      const allRaw = nums.map(n => n.raw).join('');
+      const totalDigits = allRaw.length;
+
+      if (nums.length === 2 && nums[0].raw.length >= 3 && nums[1].raw.length >= 3) {
+        // Two solid numbers — use directly
+        rows.push({ rawA: nums[0].raw, rawB: nums[1].raw, negA: nums[0].neg, negB: nums[1].neg });
+        i++;
+      } else if (nums.length === 1 && nums[0].raw.length >= 5) {
+        // Single large number — might be missing the second column
+        // Try merging with next line if it's also incomplete
+        if (i + 1 < rawLines.length && rawLines[i + 1].length === 1) {
+          rows.push({ rawA: nums[0].raw, rawB: rawLines[i + 1][0].raw, negA: nums[0].neg, negB: rawLines[i + 1][0].neg });
+          i += 2;
         } else {
-          // gap between 2&3 is smaller → they belong together
-          rows.push({ valA: numMatches[0].num, valB: mergeBC, rawA: numMatches[0].raw, rawB: numMatches[1].raw + numMatches[2].raw });
+          // Skip single-column line (can't make a pair)
+          i++;
         }
-      } else if (numMatches.length > 4) {
-        // Many fragments — try to split into 2 halves and merge each
-        const mid = Math.floor(numMatches.length / 2);
-        const leftRaw = numMatches.slice(0, mid).map(n => n.raw).join('');
-        const rightRaw = numMatches.slice(mid).map(n => n.raw).join('');
-        const leftNum = parseInt(leftRaw);
-        const rightNum = parseInt(rightRaw);
-        if (!isNaN(leftNum) && !isNaN(rightNum)) {
-          rows.push({ valA: leftNum, valB: rightNum, rawA: leftRaw, rawB: rightRaw });
+      } else if (totalDigits >= 8) {
+        // Enough digits for two 4-6 digit numbers — split in half
+        const mid = Math.ceil(nums.length / 2);
+        const leftRaw = nums.slice(0, mid).map(n => n.raw).join('');
+        const rightRaw = nums.slice(mid).map(n => n.raw).join('');
+        if (leftRaw.length >= 3 && rightRaw.length >= 3) {
+          rows.push({ rawA: leftRaw, rawB: rightRaw, negA: nums[0].neg, negB: false });
+          i++;
+        } else {
+          i++;
         }
+      } else if (totalDigits < 8 && i + 1 < rawLines.length) {
+        // Too few digits — likely a split line, merge with next line
+        const nextNums = rawLines[i + 1];
+        const combined = [...nums, ...nextNums];
+        const combinedRaw = combined.map(n => n.raw).join('');
+        if (combinedRaw.length >= 8) {
+          const mid = Math.ceil(combined.length / 2);
+          const leftRaw = combined.slice(0, mid).map(n => n.raw).join('');
+          const rightRaw = combined.slice(mid).map(n => n.raw).join('');
+          rows.push({ rawA: leftRaw, rawB: rightRaw, negA: nums[0].neg, negB: false });
+          i += 2;
+        } else {
+          i++;
+        }
+      } else {
+        i++;
       }
     }
 
@@ -206,12 +215,11 @@ export default function ScanGame() {
 
     if (isRunningTotal) {
       // --- Global column correction for systematic 1/7 OCR confusion ---
-      // Determine expected digit count from the majority of rows
       const allLens = rows.map(r => r.rawA.length).concat(rows.map(r => r.rawB.length));
       allLens.sort((a, b) => a - b);
-      const expectedLen = allLens[Math.floor(allLens.length / 2)]; // median digit count
+      const expectedLen = allLens[Math.floor(allLens.length / 2)];
 
-      // Fix systematic leading-7 errors and wrong digit counts
+      // Use first row to determine expected leading digit
       const firstA = rows[0].rawA;
       const firstB = rows[0].rawB;
 
@@ -235,18 +243,16 @@ export default function ScanGame() {
           rawB = rawB.slice(0, expectedLen);
         }
 
-        // Skip rows where numbers are way too short (OCR fragments)
-        if (rawA.length < expectedLen - 1 || rawB.length < expectedLen - 1) {
-          return null; // will be filtered out
-        }
+        const numA = parseInt(rawA) || 0;
+        const numB = parseInt(rawB) || 0;
 
         return {
-          totalA: roundToCanasta(parseInt(rawA) || row.valA),
-          totalB: roundToCanasta(parseInt(rawB) || row.valB),
+          totalA: roundToCanasta(row.negA ? -numA : numA),
+          totalB: roundToCanasta(row.negB ? -numB : numB),
           rawA,
           rawB,
         };
-      }).filter(r => r !== null);
+      });
 
       // Determine starting base
       let baseA = initialA;
@@ -256,7 +262,7 @@ export default function ScanGame() {
       if (initialA === 0 && initialB === 0 && correctedRows.length > 0) {
         const fA = correctedRows[0].totalA;
         const fB = correctedRows[0].totalB;
-        if (fA > MAX_ROUND_SCORE || fB > MAX_ROUND_SCORE) {
+        if (Math.abs(fA) > MAX_ROUND_SCORE || Math.abs(fB) > MAX_ROUND_SCORE) {
           baseA = fA;
           baseB = fB;
           startIdx = 1;
@@ -270,7 +276,7 @@ export default function ScanGame() {
         let diffA = curr.totalA - prev.totalA;
         let diffB = curr.totalB - prev.totalB;
 
-        // Try additional 1/7 fixes at individual positions if diff is bad
+        // Try 1/7 fixes at individual positions if diff is bad
         if (Math.abs(diffA) > MAX_ROUND_SCORE && curr.rawA) {
           const variants = fix17Variants(curr.rawA);
           for (const v of variants) {
@@ -288,28 +294,22 @@ export default function ScanGame() {
           }
         }
 
-        // Skip impossible rows
-        if (Math.abs(diffA) > MAX_ROUND_SCORE || Math.abs(diffB) > MAX_ROUND_SCORE) continue;
-
+        // NEVER skip — always include the round (user can manually correct later)
         diffA = roundToCanasta(diffA);
         diffB = roundToCanasta(diffB);
 
-        if (diffA !== 0 || diffB !== 0) {
-          games.push({ scoreA: diffA.toString(), scoreB: diffB.toString() });
-        }
+        games.push({ scoreA: diffA.toString(), scoreB: diffB.toString() });
       }
     } else {
       // Values are per-round scores — use directly
       for (const row of rows) {
-        let scoreA = roundToCanasta(row.valA);
-        let scoreB = roundToCanasta(row.valB);
+        const numA = parseInt(row.rawA) || 0;
+        const numB = parseInt(row.rawB) || 0;
+        let scoreA = roundToCanasta(row.negA ? -numA : numA);
+        let scoreB = roundToCanasta(row.negB ? -numB : numB);
 
-        // Skip impossible single-round scores
-        if (Math.abs(scoreA) > MAX_ROUND_SCORE || Math.abs(scoreB) > MAX_ROUND_SCORE) continue;
-
-        if (scoreA !== 0 || scoreB !== 0) {
-          games.push({ scoreA: scoreA.toString(), scoreB: scoreB.toString() });
-        }
+        // Always include — user can manually correct later
+        games.push({ scoreA: scoreA.toString(), scoreB: scoreB.toString() });
       }
     }
 
