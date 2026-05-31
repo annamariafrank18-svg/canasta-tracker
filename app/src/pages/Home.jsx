@@ -49,21 +49,21 @@ export default function Home() {
                 </button>
               </div>
               <div className="game-teams">
-                <div className={`team ${game.winner === 'A' ? 'winner' : ''}`}>
+                <div className={`team ${game.teamAScore > game.teamBScore ? 'winner' : ''}`}>
                   <span className="team-label">Team A</span>
-                  <span className="team-score">{game.scoreA}</span>
+                  <span className="team-score">{game.teamAScore}</span>
                   <div className="team-players">
-                    {game.teamPlayers?.filter(tp => tp.team === 'A').map(tp => (
+                    {game.players?.filter(tp => tp.team === 'A').map(tp => (
                       <span key={tp.id} className="player-tag">{tp.player?.name}</span>
                     ))}
                   </div>
                 </div>
                 <div className="vs">VS</div>
-                <div className={`team ${game.winner === 'B' ? 'winner' : ''}`}>
+                <div className={`team ${game.teamBScore > game.teamAScore ? 'winner' : ''}`}>
                   <span className="team-label">Team B</span>
-                  <span className="team-score">{game.scoreB}</span>
+                  <span className="team-score">{game.teamBScore}</span>
                   <div className="team-players">
-                    {game.teamPlayers?.filter(tp => tp.team === 'B').map(tp => (
+                    {game.players?.filter(tp => tp.team === 'B').map(tp => (
                       <span key={tp.id} className="player-tag">{tp.player?.name}</span>
                     ))}
                   </div>

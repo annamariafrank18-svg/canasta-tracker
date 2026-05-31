@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 import Layout from '../components/Layout';
 
 export default function NewGame() {
   const { players, fetchPlayers, createGame } = useGameStore();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const scannedRounds = location.state?.scannedRounds;
 
   const [teamA, setTeamA] = useState([]);
   const [teamB, setTeamB] = useState([]);
-  const [rounds, setRounds] = useState([{ scoreA: '', scoreB: '' }]);
+  const [rounds, setRounds] = useState(scannedRounds || [{ scoreA: '', scoreB: '' }]);
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -64,17 +67,15 @@ export default function NewGame() {
     setSubmitting(true);
     const gameData = {
       date: new Date(date).toISOString(),
-      scoreA: totalA,
-      scoreB: totalB,
-      winner: totalA > totalB ? 'A' : totalB > totalA ? 'B' : 'A',
-      teamA: teamA,
-      teamB: teamB,
+      teamAScore: totalA,
+      teamBScore: totalB,
+      teamAPlayers: teamA,
+      teamBPlayers: teamB,
       rounds: rounds
         .filter(r => r.scoreA !== '' || r.scoreB !== '')
         .map((r, i) => ({
-          roundNumber: i + 1,
-          scoreA: parseInt(r.scoreA) || 0,
-          scoreB: parseInt(r.scoreB) || 0,
+          teamAScore: parseInt(r.scoreA) || 0,
+          teamBScore: parseInt(r.scoreB) || 0,
         })),
     };
 
@@ -130,7 +131,7 @@ export default function NewGame() {
 
           <div className="rounds-section">
             <div className="rounds-header">
-              <h3>Runden</h3>
+              <h3>Runden ({rounds.length})</h3>
               <button type="button" className="btn-secondary btn-sm" onClick={addRound}>
                 + Runde
               </button>

@@ -20,7 +20,11 @@ export default function Layout({ children }) {
         </NavLink>
         <NavLink to="/games/new" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
           <span className="nav-icon">➕</span>
-          <span>Neues Spiel</span>
+          <span>Manuell</span>
+        </NavLink>
+        <NavLink to="/games/scan" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
+          <span className="nav-icon">📷</span>
+          <span>Scannen</span>
         </NavLink>
         <NavLink to="/players" className={({ isActive }) => isActive ? 'nav-item active' : 'nav-item'}>
           <span className="nav-icon">👥</span>

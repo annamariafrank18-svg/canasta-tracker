@@ -5,6 +5,7 @@ import Register from './pages/Register';
 import Home from './pages/Home';
 import Players from './pages/Players';
 import NewGame from './pages/NewGame';
+import ScanGame from './pages/ScanGame';
 import Stats from './pages/Stats';
 
 function PrivateRoute({ children }) {
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/" element={<PrivateRoute><Home /></PrivateRoute>} />
         <Route path="/players" element={<PrivateRoute><Players /></PrivateRoute>} />
         <Route path="/games/new" element={<PrivateRoute><NewGame /></PrivateRoute>} />
+        <Route path="/games/scan" element={<PrivateRoute><ScanGame /></PrivateRoute>} />
         <Route path="/stats" element={<PrivateRoute><Stats /></PrivateRoute>} />
       </Routes>
     </BrowserRouter>

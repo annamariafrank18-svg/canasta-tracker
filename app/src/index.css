@@ -508,6 +508,48 @@ input:focus {
   margin-bottom: 12px;
 }
 
+/* Chart */
+.chart-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: var(--card);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-btn.toggle-active {
+  background: var(--accent);
+  color: white;
+}
+
+.chart-container {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 8px;
+  margin-bottom: 8px;
+}
+
+.empty-chart {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 20px;
+}
+
 .ranking-card {
   display: flex;
   align-items: center;
@@ -519,9 +561,21 @@ input:focus {
   min-width: 30px;
 }
 
-.ranking-name {
+.ranking-team-info {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ranking-name {
   font-weight: 500;
+  font-size: 14px;
+}
+
+.ranking-points {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .ranking-stats {
@@ -555,4 +609,162 @@ input:focus {
 
 .fun-text {
   font-size: 14px;
+}
+
+/* Scan Page */
+.scan-description {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.scan-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.btn-full {
+  width: 100%;
+  padding: 14px;
+  text-align: center;
+}
+
+.scan-loading {
+  text-align: center;
+  padding: 30px;
+  color: var(--warning);
+  font-size: 16px;
+}
+
+.scan-loading-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.scan-preview {
+  margin-bottom: 20px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.scan-preview img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: contain;
+  background: #000;
+}
+
+.scan-results {
+  margin-top: 16px;
+}
+
+.scan-results h3 {
+  margin-bottom: 12px;
+}
+
+.scan-no-results {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.scan-rounds {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.scan-round-header {
+  display: flex;
+  justify-content: space-around;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.scan-round-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+}
+
+.scan-game-num {
+  color: var(--text-muted);
+  font-size: 12px;
+  min-width: 20px;
+}
+
+.scan-winner {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.scan-total-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.scan-teams-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.scan-team-badge {
+  padding: 4px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.scan-team-badge.team-a {
+  background: rgba(78, 205, 196, 0.2);
+  color: var(--success);
+}
+
+.scan-team-badge.team-b {
+  background: rgba(254, 202, 87, 0.2);
+  color: var(--warning);
+}
+
+.scan-raw {
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.scan-raw summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.scan-raw pre {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  white-space: pre-wrap;
+  font-size: 11px;
+  max-height: 200px;
+  overflow-y: auto;
 }
