@@ -128,135 +128,117 @@ export default function ScanGame() {
     const MAX_ROUND_SCORE = 5000;
 
     // Extract exactly 2 numbers per line (one per team)
-    const runningTotals = [];
+    // Handles negative numbers (minus sign or em-dash before digits)
+    const rows = [];
     for (const line of lines) {
-      if (!/\d{2}/.test(line)) continue;
+      if (!/\d/.test(line)) continue;
 
-      // Clean common OCR artifacts: replace O/o with 0, l/I with 1
-      let cleaned = line.replace(/[oO]/g, '0').replace(/[lI]/g, '1');
+      // Normalize dashes to minus sign, clean OCR artifacts
+      let cleaned = line.replace(/[–—]/g, '-');
+      // Only replace standalone O (not inside words) with 0
+      cleaned = cleaned.replace(/(?<![A-Za-z])O(?![A-Za-z])/g, '0');
       // Remove dots/commas that might be thousand separators
       cleaned = cleaned.replace(/(\d)[.,](\d)/g, '$1$2');
 
-      // Split line roughly in half by whitespace groups to get left/right columns
-      const parts = cleaned.split(/\s{2,}|\t/);
+      // Extract all numbers including negative ones
+      const numMatches = [...cleaned.matchAll(/-?\s*\d+/g)].map(m => {
+        const raw = m[0].replace(/\s+/g, '');
+        return { num: parseInt(raw), raw: raw.replace('-', '') };
+      }).filter(n => !isNaN(n.num));
 
-      let numA = null;
-      let numB = null;
-      let rawA = '';
-      let rawB = '';
-
-      if (parts.length >= 2) {
-        // Two clear columns separated by whitespace
-        // Extract number from each part (join digits that may be space-separated)
-        const extractNum = (part) => {
-          // Remove non-digit chars except spaces between digits
-          const digits = part.replace(/[^\d\s]/g, '').trim();
-          // Join space-separated digit groups (OCR splitting: "1 250" → "1250")
-          const joined = digits.replace(/\s+/g, '');
-          return joined.length >= 3 ? { num: parseInt(joined), raw: joined } : null;
-        };
-        const a = extractNum(parts[0]);
-        const b = extractNum(parts[parts.length - 1]);
-        if (a) { numA = a.num; rawA = a.raw; }
-        if (b) { numB = b.num; rawB = b.raw; }
-      } else {
-        // Single block — try to find exactly 2 number groups
-        const numbers = cleaned.match(/\d+/g);
-        if (numbers && numbers.length === 2) {
-          numA = parseInt(numbers[0]);
-          numB = parseInt(numbers[1]);
-          rawA = numbers[0];
-          rawB = numbers[1];
-        } else if (numbers && numbers.length > 2) {
-          // Merge adjacent small groups that are likely split numbers
-          const merged = [];
-          let current = numbers[0];
-          for (let j = 1; j < numbers.length; j++) {
-            // If current number is small (1-2 digits), merge with next
-            if (current.length <= 2 && (current.length + numbers[j].length) <= 5) {
-              current += numbers[j];
-            } else {
-              merged.push(current);
-              current = numbers[j];
-            }
-          }
-          merged.push(current);
-          if (merged.length >= 2) {
-            numA = parseInt(merged[0]);
-            numB = parseInt(merged[1]);
-            rawA = merged[0];
-            rawB = merged[1];
-          }
+      if (numMatches.length === 2) {
+        rows.push({
+          valA: numMatches[0].num,
+          valB: numMatches[1].num,
+          rawA: numMatches[0].raw,
+          rawB: numMatches[1].raw,
+        });
+      } else if (numMatches.length > 2) {
+        // Try to pick the 2 most meaningful numbers (skip tiny noise like "1" or "2")
+        const meaningful = numMatches.filter(n => Math.abs(n.num) >= 5);
+        if (meaningful.length >= 2) {
+          rows.push({
+            valA: meaningful[0].num,
+            valB: meaningful[1].num,
+            rawA: meaningful[0].raw,
+            rawB: meaningful[1].raw,
+          });
         }
-      }
-
-      if (numA !== null && numB !== null && numA >= 100 && numB >= 100) {
-        runningTotals.push({ totalA: numA, totalB: numB, rawA, rawB });
       }
     }
 
-    // Apply Canasta rounding to running totals
-    const correctedTotals = runningTotals.map(row => ({
-      totalA: roundToCanasta(row.totalA),
-      totalB: roundToCanasta(row.totalB),
-      rawA: row.rawA,
-      rawB: row.rawB,
-    }));
+    if (rows.length === 0) {
+      return { teamAName, teamBName, games: [], runningTotals: [], rawText: text, isRunningTotal: false };
+    }
 
-    // Convert running totals to per-round scores (differences)
+    // Detect if values are running totals or per-round scores
+    // Running totals: values generally increase. Per-round: can go up/down freely.
+    let increasingCount = 0;
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].valA >= rows[i - 1].valA) increasingCount++;
+      if (rows[i].valB >= rows[i - 1].valB) increasingCount++;
+    }
+    const totalComparisons = (rows.length - 1) * 2;
+    const isRunningTotal = totalComparisons > 0 && (increasingCount / totalComparisons) >= 0.7;
+
     const games = [];
-    for (let i = 0; i < correctedTotals.length; i++) {
-      const curr = correctedTotals[i];
-      const prev = i > 0 ? correctedTotals[i - 1] : { totalA: 0, totalB: 0 };
 
-      let diffA = curr.totalA - prev.totalA;
-      let diffB = curr.totalB - prev.totalB;
+    if (isRunningTotal) {
+      // Values are cumulative — compute differences
+      const corrected = rows.map(row => ({
+        totalA: roundToCanasta(row.valA),
+        totalB: roundToCanasta(row.valB),
+        rawA: row.rawA,
+        rawB: row.rawB,
+      }));
 
-      if (diffA < -50000 || diffB < -50000) continue;
-      if (i === 0 && (curr.totalA > 50000 || curr.totalB > 50000)) continue;
+      for (let i = 0; i < corrected.length; i++) {
+        const curr = corrected[i];
+        const prev = i > 0 ? corrected[i - 1] : { totalA: 0, totalB: 0 };
 
-      // Fix 1/7 OCR confusion: if diff exceeds max, try swapping 1<->7
-      if ((diffA < 0 || diffA > MAX_ROUND_SCORE) && correctedTotals[i].rawA) {
-        const variants = fix17Variants(correctedTotals[i].rawA);
-        for (const v of variants) {
-          const corrected = roundToCanasta(v);
-          const testDiff = corrected - prev.totalA;
-          if (testDiff >= 0 && testDiff <= MAX_ROUND_SCORE) {
-            curr.totalA = corrected;
-            diffA = testDiff;
-            break;
+        let diffA = curr.totalA - prev.totalA;
+        let diffB = curr.totalB - prev.totalB;
+
+        // Fix 1/7 OCR confusion
+        if ((diffA < 0 || diffA > MAX_ROUND_SCORE) && curr.rawA) {
+          const variants = fix17Variants(curr.rawA);
+          for (const v of variants) {
+            const c = roundToCanasta(v);
+            const d = c - prev.totalA;
+            if (d >= 0 && d <= MAX_ROUND_SCORE) { curr.totalA = c; diffA = d; break; }
           }
         }
-      }
-
-      if ((diffB < 0 || diffB > MAX_ROUND_SCORE) && correctedTotals[i].rawB) {
-        const variants = fix17Variants(correctedTotals[i].rawB);
-        for (const v of variants) {
-          const corrected = roundToCanasta(v);
-          const testDiff = corrected - prev.totalB;
-          if (testDiff >= 0 && testDiff <= MAX_ROUND_SCORE) {
-            curr.totalB = corrected;
-            diffB = testDiff;
-            break;
+        if ((diffB < 0 || diffB > MAX_ROUND_SCORE) && curr.rawB) {
+          const variants = fix17Variants(curr.rawB);
+          for (const v of variants) {
+            const c = roundToCanasta(v);
+            const d = c - prev.totalB;
+            if (d >= 0 && d <= MAX_ROUND_SCORE) { curr.totalB = c; diffB = d; break; }
           }
         }
+
+        // Skip impossible rows
+        if (Math.abs(diffA) > MAX_ROUND_SCORE || Math.abs(diffB) > MAX_ROUND_SCORE) continue;
+
+        diffA = roundToCanasta(diffA);
+        diffB = roundToCanasta(diffB);
+
+        if (diffA !== 0 || diffB !== 0) {
+          games.push({ scoreA: diffA.toString(), scoreB: diffB.toString() });
+        }
       }
+    } else {
+      // Values are per-round scores — use directly
+      for (const row of rows) {
+        let scoreA = roundToCanasta(row.valA);
+        let scoreB = roundToCanasta(row.valB);
 
-      // STRICT: Skip row if difference is still impossible after corrections
-      if (diffA > MAX_ROUND_SCORE || diffA < -MAX_ROUND_SCORE) continue;
-      if (diffB > MAX_ROUND_SCORE || diffB < -MAX_ROUND_SCORE) continue;
+        // Skip impossible single-round scores
+        if (Math.abs(scoreA) > MAX_ROUND_SCORE || Math.abs(scoreB) > MAX_ROUND_SCORE) continue;
 
-      // Ensure diffs are valid Canasta scores (end in 0 or 5)
-      diffA = roundToCanasta(diffA);
-      diffB = roundToCanasta(diffB);
-
-      if (diffA !== 0 || diffB !== 0) {
-        games.push({
-          scoreA: diffA.toString(),
-          scoreB: diffB.toString(),
-          runningA: curr.totalA,
-          runningB: curr.totalB,
-        });
+        if (scoreA !== 0 || scoreB !== 0) {
+          games.push({ scoreA: scoreA.toString(), scoreB: scoreB.toString() });
+        }
       }
     }
 
@@ -264,9 +246,9 @@ export default function ScanGame() {
       teamAName,
       teamBName,
       games,
-      runningTotals,
+      runningTotals: rows,
       rawText: text,
-      isRunningTotal: runningTotals.length > 0 && runningTotals[0].totalA > 1000,
+      isRunningTotal,
     };
   };
 
