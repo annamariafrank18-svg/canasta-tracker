@@ -10,6 +10,29 @@ const useGameStore = create((set, get) => ({
   loading: false,
   error: null,
 
+  // Draft game state (persists across navigations)
+  draft: {
+    teamA: [],
+    teamB: [],
+    rounds: [{ scoreA: '', scoreB: '' }],
+    date: new Date().toISOString().split('T')[0],
+  },
+
+  updateDraft: (updates) => {
+    set((state) => ({ draft: { ...state.draft, ...updates } }));
+  },
+
+  resetDraft: () => {
+    set({
+      draft: {
+        teamA: [],
+        teamB: [],
+        rounds: [{ scoreA: '', scoreB: '' }],
+        date: new Date().toISOString().split('T')[0],
+      },
+    });
+  },
+
   // Players
   fetchPlayers: async () => {
     set({ loading: true });

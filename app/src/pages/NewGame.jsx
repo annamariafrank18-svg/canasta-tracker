@@ -4,21 +4,37 @@ import useGameStore from '../store/gameStore';
 import Layout from '../components/Layout';
 
 export default function NewGame() {
-  const { players, fetchPlayers, createGame } = useGameStore();
+  const { players, fetchPlayers, createGame, draft, updateDraft, resetDraft } = useGameStore();
   const navigate = useNavigate();
   const location = useLocation();
 
   const scannedRounds = location.state?.scannedRounds;
+  const teamNames = location.state?.teamNames;
 
-  const [teamA, setTeamA] = useState([]);
-  const [teamB, setTeamB] = useState([]);
-  const [rounds, setRounds] = useState(scannedRounds || [{ scoreA: '', scoreB: '' }]);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Load scanned rounds into draft when navigating from scan page
+  useEffect(() => {
+    if (scannedRounds && scannedRounds.length > 0) {
+      updateDraft({ rounds: scannedRounds });
+      // Clear location state so it doesn't re-apply on re-render
+      window.history.replaceState({}, '');
+    }
+  }, [scannedRounds]);
 
   useEffect(() => {
     fetchPlayers();
   }, []);
+
+  const teamA = draft.teamA;
+  const teamB = draft.teamB;
+  const rounds = draft.rounds;
+  const date = draft.date;
+
+  const setTeamA = (val) => updateDraft({ teamA: val });
+  const setTeamB = (val) => updateDraft({ teamB: val });
+  const setRounds = (val) => updateDraft({ rounds: val });
+  const setDate = (val) => updateDraft({ date: val });
 
   const togglePlayer = (playerId, team) => {
     if (team === 'A') {
@@ -81,7 +97,10 @@ export default function NewGame() {
 
     const success = await createGame(gameData);
     setSubmitting(false);
-    if (success) navigate('/');
+    if (success) {
+      resetDraft();
+      navigate('/');
+    }
   };
 
   return (
