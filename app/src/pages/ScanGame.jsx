@@ -260,6 +260,7 @@ export default function ScanGame() {
       let startIdx = 0;
 
       if (initialA === 0 && initialB === 0 && correctedRows.length > 0) {
+        // No manual start → use first row as base if it's too large for a single round
         const fA = correctedRows[0].totalA;
         const fB = correctedRows[0].totalB;
         if (Math.abs(fA) > MAX_ROUND_SCORE || Math.abs(fB) > MAX_ROUND_SCORE) {
@@ -267,21 +268,33 @@ export default function ScanGame() {
           baseB = fB;
           startIdx = 1;
         }
+      } else if (initialA !== 0 || initialB !== 0) {
+        // Manual start given — skip first row if it matches the start scores (same data)
+        if (correctedRows.length > 0) {
+          const fA = correctedRows[0].totalA;
+          const fB = correctedRows[0].totalB;
+          if (Math.abs(fA - initialA) < 100 && Math.abs(fB - initialB) < 100) {
+            startIdx = 1; // first OCR row = start scores, skip it
+          }
+        }
       }
+
+      // Track last known-good values to prevent error cascading
+      let lastGoodA = baseA;
+      let lastGoodB = baseB;
 
       for (let i = startIdx; i < correctedRows.length; i++) {
         const curr = correctedRows[i];
-        const prev = i > startIdx ? correctedRows[i - 1] : { totalA: baseA, totalB: baseB };
 
-        let diffA = curr.totalA - prev.totalA;
-        let diffB = curr.totalB - prev.totalB;
+        let diffA = curr.totalA - lastGoodA;
+        let diffB = curr.totalB - lastGoodB;
 
         // Try 1/7 fixes at individual positions if diff is bad
         if (Math.abs(diffA) > MAX_ROUND_SCORE && curr.rawA) {
           const variants = fix17Variants(curr.rawA);
           for (const v of variants) {
             const c = roundToCanasta(v);
-            const d = c - prev.totalA;
+            const d = c - lastGoodA;
             if (Math.abs(d) <= MAX_ROUND_SCORE) { curr.totalA = c; diffA = d; break; }
           }
         }
@@ -289,16 +302,34 @@ export default function ScanGame() {
           const variants = fix17Variants(curr.rawB);
           for (const v of variants) {
             const c = roundToCanasta(v);
-            const d = c - prev.totalB;
+            const d = c - lastGoodB;
             if (Math.abs(d) <= MAX_ROUND_SCORE) { curr.totalB = c; diffB = d; break; }
           }
         }
 
-        // NEVER skip — always include the round (user can manually correct later)
-        diffA = roundToCanasta(diffA);
-        diffB = roundToCanasta(diffB);
+        // Only include valid rounds (skip garbage OCR rows)
+        const validA = Math.abs(diffA) <= MAX_ROUND_SCORE;
+        const validB = Math.abs(diffB) <= MAX_ROUND_SCORE;
 
-        games.push({ scoreA: diffA.toString(), scoreB: diffB.toString() });
+        if (validA && validB) {
+          diffA = roundToCanasta(diffA);
+          diffB = roundToCanasta(diffB);
+          games.push({ scoreA: diffA.toString(), scoreB: diffB.toString() });
+          // Update last good reference
+          lastGoodA = curr.totalA;
+          lastGoodB = curr.totalB;
+        } else if (validA) {
+          // Only A is valid — B is bad OCR, use A and set B to 0
+          diffA = roundToCanasta(diffA);
+          games.push({ scoreA: diffA.toString(), scoreB: '0' });
+          lastGoodA = curr.totalA;
+        } else if (validB) {
+          // Only B is valid — A is bad OCR
+          diffB = roundToCanasta(diffB);
+          games.push({ scoreA: '0', scoreB: diffB.toString() });
+          lastGoodB = curr.totalB;
+        }
+        // If both invalid → skip row entirely (bad OCR merge/fragment)
       }
     } else {
       // Values are per-round scores — use directly
