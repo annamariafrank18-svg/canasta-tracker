@@ -127,15 +127,71 @@ export default function ScanGame() {
 
     const MAX_ROUND_SCORE = 5000;
 
-    // Extract all number pairs from lines (running totals)
+    // Extract exactly 2 numbers per line (one per team)
     const runningTotals = [];
     for (const line of lines) {
-      if (!/\d{3}/.test(line)) continue;
-      const numbers = line.match(/\d+/g);
-      if (!numbers) continue;
-      const parsed = numbers.map(n => parseInt(n)).filter(n => n >= 100);
-      if (parsed.length >= 2) {
-        runningTotals.push({ totalA: parsed[0], totalB: parsed[1], rawA: numbers[0], rawB: numbers[1] });
+      if (!/\d{2}/.test(line)) continue;
+
+      // Clean common OCR artifacts: replace O/o with 0, l/I with 1
+      let cleaned = line.replace(/[oO]/g, '0').replace(/[lI]/g, '1');
+      // Remove dots/commas that might be thousand separators
+      cleaned = cleaned.replace(/(\d)[.,](\d)/g, '$1$2');
+
+      // Split line roughly in half by whitespace groups to get left/right columns
+      const parts = cleaned.split(/\s{2,}|\t/);
+
+      let numA = null;
+      let numB = null;
+      let rawA = '';
+      let rawB = '';
+
+      if (parts.length >= 2) {
+        // Two clear columns separated by whitespace
+        // Extract number from each part (join digits that may be space-separated)
+        const extractNum = (part) => {
+          // Remove non-digit chars except spaces between digits
+          const digits = part.replace(/[^\d\s]/g, '').trim();
+          // Join space-separated digit groups (OCR splitting: "1 250" → "1250")
+          const joined = digits.replace(/\s+/g, '');
+          return joined.length >= 3 ? { num: parseInt(joined), raw: joined } : null;
+        };
+        const a = extractNum(parts[0]);
+        const b = extractNum(parts[parts.length - 1]);
+        if (a) { numA = a.num; rawA = a.raw; }
+        if (b) { numB = b.num; rawB = b.raw; }
+      } else {
+        // Single block — try to find exactly 2 number groups
+        const numbers = cleaned.match(/\d+/g);
+        if (numbers && numbers.length === 2) {
+          numA = parseInt(numbers[0]);
+          numB = parseInt(numbers[1]);
+          rawA = numbers[0];
+          rawB = numbers[1];
+        } else if (numbers && numbers.length > 2) {
+          // Merge adjacent small groups that are likely split numbers
+          const merged = [];
+          let current = numbers[0];
+          for (let j = 1; j < numbers.length; j++) {
+            // If current number is small (1-2 digits), merge with next
+            if (current.length <= 2 && (current.length + numbers[j].length) <= 5) {
+              current += numbers[j];
+            } else {
+              merged.push(current);
+              current = numbers[j];
+            }
+          }
+          merged.push(current);
+          if (merged.length >= 2) {
+            numA = parseInt(merged[0]);
+            numB = parseInt(merged[1]);
+            rawA = merged[0];
+            rawB = merged[1];
+          }
+        }
+      }
+
+      if (numA !== null && numB !== null && numA >= 100 && numB >= 100) {
+        runningTotals.push({ totalA: numA, totalB: numB, rawA, rawB });
       }
     }
 
