@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 import Layout from '../components/Layout';
@@ -12,17 +12,22 @@ export default function NewGame() {
   const teamNames = location.state?.teamNames;
 
   const [submitting, setSubmitting] = useState(false);
+  const appliedRef = useRef(false);
 
-  // Load scanned rounds into draft when navigating from scan page
+  // Load scanned rounds into draft ONCE on mount
   useEffect(() => {
-    if (scannedRounds && scannedRounds.length > 0) {
-      // Deep clone to ensure independence from source
-      const cloned = scannedRounds.map(r => ({ scoreA: String(r.scoreA || ''), scoreB: String(r.scoreB || '') }));
+    if (!appliedRef.current && scannedRounds && scannedRounds.length > 0) {
+      appliedRef.current = true;
+      // Reset draft first to clear any stale rounds
+      const cloned = scannedRounds.map(r => ({
+        scoreA: r.scoreA != null && r.scoreA !== '' ? String(r.scoreA) : '',
+        scoreB: r.scoreB != null && r.scoreB !== '' ? String(r.scoreB) : '',
+      }));
       updateDraft({ rounds: cloned });
-      // Clear location state so it doesn't re-apply on re-render
+      // Clear location state so refresh doesn't re-apply
       window.history.replaceState({}, '');
     }
-  }, [scannedRounds]);
+  }, []);
 
   useEffect(() => {
     fetchPlayers();
@@ -30,7 +35,13 @@ export default function NewGame() {
 
   const teamA = draft.teamA;
   const teamB = draft.teamB;
-  const rounds = draft.rounds;
+  // Use scannedRounds directly on first render; after useEffect syncs to draft, use draft
+  const rounds = (!appliedRef.current && scannedRounds && scannedRounds.length > 0)
+    ? scannedRounds.map(r => ({
+        scoreA: r.scoreA != null && r.scoreA !== '' ? String(r.scoreA) : '',
+        scoreB: r.scoreB != null && r.scoreB !== '' ? String(r.scoreB) : '',
+      }))
+    : draft.rounds;
   const date = draft.date;
 
   const setTeamA = (val) => updateDraft({ teamA: val });
