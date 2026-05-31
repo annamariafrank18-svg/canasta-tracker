@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import useGameStore from '../store/gameStore';
 import Layout from '../components/Layout';
 
@@ -209,6 +209,33 @@ export default function Stats() {
     return { data, teams: [...teamSet] };
   }, [games]);
 
+  // Per-game total scores (non-cumulative)
+  const gameScoresData = useMemo(() => {
+    if (!games || games.length === 0) return { data: [], teams: [] };
+    const sorted = [...games].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const teamSet = new Set();
+    const data = sorted.map((game, idx) => {
+      const point = {
+        game: idx + 1,
+        date: new Date(game.date).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }),
+      };
+      const gamePlayers = game.players || [];
+      const teamAPlayers = gamePlayers.filter(tp => tp.team === 'A').map(tp => tp.player).filter(Boolean);
+      const teamBPlayers = gamePlayers.filter(tp => tp.team === 'B').map(tp => tp.player).filter(Boolean);
+      if (teamAPlayers.length === 0 || teamBPlayers.length === 0) return point;
+
+      const teamAKey = getTeamKey(teamAPlayers);
+      const teamBKey = getTeamKey(teamBPlayers);
+      teamSet.add(teamAKey);
+      teamSet.add(teamBKey);
+
+      point[teamAKey] = game.teamAScore || 0;
+      point[teamBKey] = game.teamBScore || 0;
+      return point;
+    });
+    return { data, teams: [...teamSet] };
+  }, [games]);
+
   return (
     <Layout>
       <div className="page">
@@ -240,6 +267,12 @@ export default function Stats() {
               <button
                 className={`toggle-btn ${chartMode === 'games' ? 'toggle-active' : ''}`}
                 onClick={() => setChartMode('games')}
+              >
+                Kumulativ
+              </button>
+              <button
+                className={`toggle-btn ${chartMode === 'totals' ? 'toggle-active' : ''}`}
+                onClick={() => setChartMode('totals')}
               >
                 Pro Spiel
               </button>
@@ -275,6 +308,27 @@ export default function Stats() {
                       />
                     ))}
                   </LineChart>
+                </ResponsiveContainer>
+              ) : chartMode === 'totals' ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={gameScoresData.data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                    <Tooltip
+                      contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8 }}
+                      labelStyle={{ color: 'var(--text)' }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {gameScoresData.teams.map((team, i) => (
+                      <Bar
+                        key={team}
+                        dataKey={team}
+                        name={team}
+                        fill={COLORS[i % COLORS.length]}
+                      />
+                    ))}
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <ResponsiveContainer width="100%" height={250}>
