@@ -146,7 +146,7 @@ export default function ScanGame() {
       // Extract all numbers including negative ones
       const numMatches = [...cleaned.matchAll(/-?\s*\d+/g)].map(m => {
         const raw = m[0].replace(/\s+/g, '');
-        return { num: parseInt(raw), raw: raw.replace('-', '') };
+        return { num: parseInt(raw), raw: raw.replace('-', ''), pos: m.index };
       }).filter(n => !isNaN(n.num));
 
       if (numMatches.length === 2) {
@@ -156,16 +156,41 @@ export default function ScanGame() {
           rawA: numMatches[0].raw,
           rawB: numMatches[1].raw,
         });
-      } else if (numMatches.length > 2) {
-        // Try to pick the 2 most meaningful numbers (skip tiny noise like "1" or "2")
-        const meaningful = numMatches.filter(n => Math.abs(n.num) >= 5);
-        if (meaningful.length >= 2) {
-          rows.push({
-            valA: meaningful[0].num,
-            valB: meaningful[1].num,
-            rawA: meaningful[0].raw,
-            rawB: meaningful[1].raw,
-          });
+      } else if (numMatches.length === 4) {
+        // Likely 2 numbers split by space each (e.g., "170 980  141 945" → 170980, 141945)
+        const mergedA = parseInt(numMatches[0].raw + numMatches[1].raw);
+        const mergedB = parseInt(numMatches[2].raw + numMatches[3].raw);
+        rows.push({
+          valA: mergedA,
+          valB: mergedB,
+          rawA: numMatches[0].raw + numMatches[1].raw,
+          rawB: numMatches[2].raw + numMatches[3].raw,
+        });
+      } else if (numMatches.length === 3) {
+        // One number might be split: try both split options
+        // Option A: first two merge, third standalone
+        const mergeAB = parseInt(numMatches[0].raw + numMatches[1].raw);
+        // Option B: first standalone, last two merge
+        const mergeBC = parseInt(numMatches[1].raw + numMatches[2].raw);
+        // Use gap between numbers to decide: larger gap = column separator
+        const gap1 = numMatches[1].pos - (numMatches[0].pos + numMatches[0].raw.length);
+        const gap2 = numMatches[2].pos - (numMatches[1].pos + numMatches[1].raw.length);
+        if (gap1 < gap2) {
+          // gap between 1&2 is smaller → they belong together
+          rows.push({ valA: mergeAB, valB: numMatches[2].num, rawA: numMatches[0].raw + numMatches[1].raw, rawB: numMatches[2].raw });
+        } else {
+          // gap between 2&3 is smaller → they belong together
+          rows.push({ valA: numMatches[0].num, valB: mergeBC, rawA: numMatches[0].raw, rawB: numMatches[1].raw + numMatches[2].raw });
+        }
+      } else if (numMatches.length > 4) {
+        // Many fragments — try to split into 2 halves and merge each
+        const mid = Math.floor(numMatches.length / 2);
+        const leftRaw = numMatches.slice(0, mid).map(n => n.raw).join('');
+        const rightRaw = numMatches.slice(mid).map(n => n.raw).join('');
+        const leftNum = parseInt(leftRaw);
+        const rightNum = parseInt(rightRaw);
+        if (!isNaN(leftNum) && !isNaN(rightNum)) {
+          rows.push({ valA: leftNum, valB: rightNum, rawA: leftRaw, rawB: rightRaw });
         }
       }
     }
@@ -188,9 +213,26 @@ export default function ScanGame() {
         rawB: row.rawB,
       }));
 
-      for (let i = 0; i < corrected.length; i++) {
+      // Auto-detect starting base: if no manual start was given and first row
+      // is already way above MAX_ROUND_SCORE, use first row as baseline
+      let baseA = initialA;
+      let baseB = initialB;
+      let startIdx = 0;
+
+      if (initialA === 0 && initialB === 0 && corrected.length > 0) {
+        const firstA = corrected[0].totalA;
+        const firstB = corrected[0].totalB;
+        if (firstA > MAX_ROUND_SCORE || firstB > MAX_ROUND_SCORE) {
+          // First row is the starting score, actual rounds start from row 2
+          baseA = firstA;
+          baseB = firstB;
+          startIdx = 1;
+        }
+      }
+
+      for (let i = startIdx; i < corrected.length; i++) {
         const curr = corrected[i];
-        const prev = i > 0 ? corrected[i - 1] : { totalA: initialA, totalB: initialB };
+        const prev = i > startIdx ? corrected[i - 1] : { totalA: baseA, totalB: baseB };
 
         let diffA = curr.totalA - prev.totalA;
         let diffB = curr.totalB - prev.totalB;
