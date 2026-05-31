@@ -9,6 +9,8 @@ export default function ScanGame() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [tableMode, setTableMode] = useState('perRound'); // 'perRound' or 'runningTotal'
+  const [startA, setStartA] = useState('');
+  const [startB, setStartB] = useState('');
   const navigate = useNavigate();
 
   const takePhoto = async () => {
@@ -73,7 +75,7 @@ export default function ScanGame() {
       }
 
       const text = data.ParsedResults?.[0]?.ParsedText || '';
-      const parsed = parseScoreTable(text, tableMode);
+      const parsed = parseScoreTable(text, tableMode, parseInt(startA) || 0, parseInt(startB) || 0);
       setResults(parsed);
     } catch (err) {
       setError('Fehler bei der Texterkennung. Prüfe deine Internetverbindung.');
@@ -82,7 +84,7 @@ export default function ScanGame() {
   };
 
   // Parse a Canasta score table
-  const parseScoreTable = (text, mode) => {
+  const parseScoreTable = (text, mode, initialA = 0, initialB = 0) => {
     const lines = text.split('\n').filter(l => l.trim());
 
     // Try to detect team names from header line
@@ -188,7 +190,7 @@ export default function ScanGame() {
 
       for (let i = 0; i < corrected.length; i++) {
         const curr = corrected[i];
-        const prev = i > 0 ? corrected[i - 1] : { totalA: 0, totalB: 0 };
+        const prev = i > 0 ? corrected[i - 1] : { totalA: initialA, totalB: initialB };
 
         let diffA = curr.totalA - prev.totalA;
         let diffB = curr.totalB - prev.totalB;
@@ -296,6 +298,31 @@ export default function ScanGame() {
             Laufende Summe
           </button>
         </div>
+
+        {tableMode === 'runningTotal' && (
+          <div className="start-scores" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.8rem', opacity: 0.7 }}>Vorstand Team A</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={startA}
+                onChange={(e) => setStartA(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '0.8rem', opacity: 0.7 }}>Vorstand Team B</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={startB}
+                onChange={(e) => setStartB(e.target.value)}
+                style={{ width: '100%' }}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="scan-buttons">
           <button className="btn-primary" onClick={takePhoto}>
