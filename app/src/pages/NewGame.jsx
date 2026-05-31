@@ -16,7 +16,9 @@ export default function NewGame() {
   // Load scanned rounds into draft when navigating from scan page
   useEffect(() => {
     if (scannedRounds && scannedRounds.length > 0) {
-      updateDraft({ rounds: scannedRounds });
+      // Deep clone to ensure independence from source
+      const cloned = scannedRounds.map(r => ({ scoreA: String(r.scoreA || ''), scoreB: String(r.scoreB || '') }));
+      updateDraft({ rounds: cloned });
       // Clear location state so it doesn't re-apply on re-render
       window.history.replaceState({}, '');
     }
@@ -65,8 +67,9 @@ export default function NewGame() {
   };
 
   const updateRound = (index, field, value) => {
-    const updated = [...rounds];
-    updated[index][field] = value;
+    const updated = rounds.map((r, i) => 
+      i === index ? { ...r, [field]: value } : { ...r }
+    );
     setRounds(updated);
   };
 
