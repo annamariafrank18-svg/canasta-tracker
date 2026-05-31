@@ -98,48 +98,97 @@ export default function ScanGame() {
       }
     }
 
+    // --- Canasta score correction helpers ---
+
+    // All Canasta scores end in 0 or 5
+    const roundToCanasta = (n) => {
+      const sign = n < 0 ? -1 : 1;
+      const abs = Math.abs(n);
+      const lastDigit = abs % 10;
+      if (lastDigit === 0 || lastDigit === 5) return n;
+      const rounded = lastDigit < 3 ? abs - lastDigit
+        : lastDigit < 8 ? abs - lastDigit + 5
+        : abs - lastDigit + 10;
+      return sign * rounded;
+    };
+
+    // Try fixing 1/7 OCR confusion — returns all number variants
+    const fix17Variants = (numStr) => {
+      const variants = new Set([parseInt(numStr)]);
+      for (let i = 0; i < numStr.length; i++) {
+        if (numStr[i] === '1') {
+          variants.add(parseInt(numStr.slice(0, i) + '7' + numStr.slice(i + 1)));
+        } else if (numStr[i] === '7') {
+          variants.add(parseInt(numStr.slice(0, i) + '1' + numStr.slice(i + 1)));
+        }
+      }
+      return [...variants];
+    };
+
+    const MAX_ROUND_SCORE = 5000;
+
     // Extract all number pairs from lines (running totals)
     const runningTotals = [];
     for (const line of lines) {
-      // Skip header lines (only letters, no long numbers)
       if (!/\d{3}/.test(line)) continue;
-
-      // Extract all numbers from this line
       const numbers = line.match(/\d+/g);
       if (!numbers) continue;
-
-      // Parse numbers, filter out very small ones (likely noise)
       const parsed = numbers.map(n => parseInt(n)).filter(n => n >= 100);
-
-      // We expect pairs: first two numbers are the first column pair
       if (parsed.length >= 2) {
-        // Take first two numbers as our pair for this row
-        runningTotals.push({ totalA: parsed[0], totalB: parsed[1] });
+        runningTotals.push({ totalA: parsed[0], totalB: parsed[1], rawA: numbers[0], rawB: numbers[1] });
       }
     }
 
-    // Convert running totals to per-game scores (differences)
+    // Apply Canasta rounding to running totals
+    const correctedTotals = runningTotals.map(row => ({
+      totalA: roundToCanasta(row.totalA),
+      totalB: roundToCanasta(row.totalB),
+      rawA: row.rawA,
+      rawB: row.rawB,
+    }));
+
+    // Convert running totals to per-round scores (differences)
     const games = [];
-    for (let i = 0; i < runningTotals.length; i++) {
-      const curr = runningTotals[i];
-      const prev = i > 0 ? runningTotals[i - 1] : { totalA: 0, totalB: 0 };
+    for (let i = 0; i < correctedTotals.length; i++) {
+      const curr = correctedTotals[i];
+      const prev = i > 0 ? correctedTotals[i - 1] : { totalA: 0, totalB: 0 };
 
       let diffA = curr.totalA - prev.totalA;
       let diffB = curr.totalB - prev.totalB;
 
-      // If differences are negative or unreasonably large, the totals might have reset
-      // (new section on the page) — treat as absolute score
-      if (diffA < -50000 || diffB < -50000) {
-        // Likely a new column/section start — skip or treat first row as base
-        continue;
+      if (diffA < -50000 || diffB < -50000) continue;
+      if (i === 0 && (curr.totalA > 50000 || curr.totalB > 50000)) continue;
+
+      // Fix 1/7 OCR confusion: if diff exceeds max, try swapping 1<->7
+      if (Math.abs(diffA) > MAX_ROUND_SCORE && correctedTotals[i].rawA) {
+        const variants = fix17Variants(correctedTotals[i].rawA);
+        for (const v of variants) {
+          const corrected = roundToCanasta(v);
+          const testDiff = corrected - prev.totalA;
+          if (testDiff >= 0 && testDiff <= MAX_ROUND_SCORE) {
+            curr.totalA = corrected;
+            diffA = testDiff;
+            break;
+          }
+        }
       }
 
-      // For the very first entry, if values are already large (>50000),
-      // it's a continuation — we can only track from here
-      if (i === 0 && (curr.totalA > 50000 || curr.totalB > 50000)) {
-        // This is a running total sheet — we start tracking from row 1
-        continue;
+      if (Math.abs(diffB) > MAX_ROUND_SCORE && correctedTotals[i].rawB) {
+        const variants = fix17Variants(correctedTotals[i].rawB);
+        for (const v of variants) {
+          const corrected = roundToCanasta(v);
+          const testDiff = corrected - prev.totalB;
+          if (testDiff >= 0 && testDiff <= MAX_ROUND_SCORE) {
+            curr.totalB = corrected;
+            diffB = testDiff;
+            break;
+          }
+        }
       }
+
+      // Ensure diffs are valid Canasta scores (end in 0 or 5)
+      diffA = roundToCanasta(diffA);
+      diffB = roundToCanasta(diffB);
 
       if (diffA !== 0 || diffB !== 0) {
         games.push({
